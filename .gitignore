@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Production build
+dist/
+
+# Temporary and log files
+*.log
+temp_portable.zip
+*.zip
+
+# Environment & local settings
+.env
+.DS_Store
+Thumbs.db

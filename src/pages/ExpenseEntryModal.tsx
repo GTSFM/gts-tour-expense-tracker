@@ -250,6 +250,9 @@ export const ExpenseEntryModal: React.FC<ExpenseEntryModalProps> = ({
 
       const formData = new FormData();
       formData.append('file', fileToUpload);
+      if (previewImage) {
+        formData.append('dataUrl', previewImage);
+      }
       if (currentClaim) {
         formData.append('claimId', currentClaim.id);
         formData.append('documentType', `${category} Receipt`);

@@ -609,7 +609,7 @@ app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => 
     }
 
     const user = getReqUser(req);
-    const { claimId, expenseItemId, documentType } = req.body;
+    const { claimId, expenseItemId, documentType, dataUrl } = req.body;
 
     const fileUrl = `/uploads/${req.file.filename}`;
 
@@ -622,6 +622,7 @@ app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => 
           documentType: documentType || 'Supporting Bill',
           documentName: req.file.originalname,
           fileUrl,
+          dataUrl: dataUrl || undefined,
           fileSize: req.file.size,
           uploadedBy: user.name
         },
@@ -635,6 +636,28 @@ app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => 
       fileName: req.file.originalname,
       fileSize: req.file.size,
       document: docRecord
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 6.5 DATA PERSISTENCE & AUTO-SYNC
+// ==========================================
+
+app.get('/api/sync/backup', (_req: Request, res: Response) => {
+  res.json({ success: true, db: store.getFullData() });
+});
+
+app.post('/api/sync/restore', (req: Request, res: Response) => {
+  try {
+    const { claims, tours, expenseItems, documents, auditTrail } = req.body;
+    store.restoreData({ claims, tours, expenseItems, documents, auditTrail });
+    res.json({
+      success: true,
+      claimsCount: store.getClaims().length,
+      toursCount: store.getTours().length
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

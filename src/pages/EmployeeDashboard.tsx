@@ -30,21 +30,61 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({
   onSubmitClaimSummary
 }) => {
   const { currentUser } = useAuth();
-  const [claims, setClaims] = useState<ExpenseClaim[]>([]);
-  const [tours, setTours] = useState<Tour[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [claims, setClaims] = useState<ExpenseClaim[]>(() => {
+    try {
+      const cached = localStorage.getItem(`gts_claims_${currentUser?.id}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [tours, setTours] = useState<Tour[]>(() => {
+    try {
+      const cached = localStorage.getItem(`gts_tours_${currentUser?.id}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadData = () => {
     if (!currentUser) return;
-    setIsLoading(true);
 
     Promise.all([
       fetch('/api/claims', { headers: { 'x-user-id': currentUser.id } }).then((r) => r.json()),
       fetch('/api/tours', { headers: { 'x-user-id': currentUser.id } }).then((r) => r.json())
     ])
       .then(([claimsData, toursData]) => {
-        setClaims(claimsData.claims || []);
-        setTours(toursData.tours || []);
+        const fetchedClaims = claimsData.claims || [];
+        const fetchedTours = toursData.tours || [];
+
+        if (fetchedClaims.length > 0 || fetchedTours.length > 0) {
+          setClaims(fetchedClaims);
+          setTours(fetchedTours);
+          try {
+            localStorage.setItem(`gts_claims_${currentUser.id}`, JSON.stringify(fetchedClaims));
+            localStorage.setItem(`gts_tours_${currentUser.id}`, JSON.stringify(fetchedTours));
+          } catch {}
+        } else {
+          try {
+            const cachedClaimsRaw = localStorage.getItem(`gts_claims_${currentUser.id}`);
+            const cachedToursRaw = localStorage.getItem(`gts_tours_${currentUser.id}`);
+            if (cachedClaimsRaw) {
+              const cachedClaims = JSON.parse(cachedClaimsRaw);
+              const cachedTours = cachedToursRaw ? JSON.parse(cachedToursRaw) : [];
+              if (cachedClaims.length > 0) {
+                setClaims(cachedClaims);
+                setTours(cachedTours);
+                fetch('/api/sync/restore', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ claims: cachedClaims, tours: cachedTours })
+                }).catch(() => {});
+              }
+            }
+          } catch {}
+        }
       })
       .catch((err) => console.error(err))
       .finally(() => setIsLoading(false));

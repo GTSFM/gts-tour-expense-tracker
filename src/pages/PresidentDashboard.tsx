@@ -24,11 +24,18 @@ interface PresidentDashboardProps {
 
 export const PresidentDashboard: React.FC<PresidentDashboardProps> = ({ onSelectClaim }) => {
   const { currentUser } = useAuth();
-  const [claims, setClaims] = useState<ExpenseClaim[]>([]);
+  const [claims, setClaims] = useState<ExpenseClaim[]>(() => {
+    try {
+      const cached = localStorage.getItem('gts_all_company_claims');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [filterRegion, setFilterRegion] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('PENDING');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Decision Modal
   const [actionClaim, setActionClaim] = useState<ExpenseClaim | null>(null);
@@ -39,11 +46,33 @@ export const PresidentDashboard: React.FC<PresidentDashboardProps> = ({ onSelect
 
   const loadData = () => {
     if (!currentUser) return;
-    setIsLoading(true);
 
     fetch('/api/claims', { headers: { 'x-user-id': currentUser.id } })
       .then((r) => r.json())
-      .then((data) => setClaims(data.claims || []))
+      .then((data) => {
+        const fetched = data.claims || [];
+        if (fetched.length > 0) {
+          setClaims(fetched);
+          try {
+            localStorage.setItem('gts_all_company_claims', JSON.stringify(fetched));
+          } catch {}
+        } else {
+          try {
+            const cachedRaw = localStorage.getItem('gts_all_company_claims');
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw);
+              if (cached.length > 0) {
+                setClaims(cached);
+                fetch('/api/sync/restore', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ claims: cached })
+                }).catch(() => {});
+              }
+            }
+          } catch {}
+        }
+      })
       .catch((e) => console.error(e))
       .finally(() => setIsLoading(false));
   };

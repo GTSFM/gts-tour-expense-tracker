@@ -29,6 +29,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
+const DATA_FILE_BACKUP = path.join(__dirname, 'data', 'db_backup.json');
 
 export interface DatabaseSchema {
   settings: SystemSettings;
@@ -97,17 +98,35 @@ export class Store {
             }
           }
 
-          // Clear all sample claims, tours, items, documents, and notifications
-          parsed.claims = [];
-          parsed.tours = [];
-          parsed.expenseItems = [];
-          parsed.documents = [];
-          parsed.auditTrail = [];
-          parsed.notifications = [];
+          // Ensure all arrays are safely preserved and NEVER wiped!
+          parsed.claims = Array.isArray(parsed.claims) ? parsed.claims : [];
+          parsed.tours = Array.isArray(parsed.tours) ? parsed.tours : [];
+          parsed.expenseItems = Array.isArray(parsed.expenseItems) ? parsed.expenseItems : [];
+          parsed.documents = Array.isArray(parsed.documents) ? parsed.documents : [];
+          parsed.auditTrail = Array.isArray(parsed.auditTrail) ? parsed.auditTrail : [];
+          parsed.notifications = Array.isArray(parsed.notifications) ? parsed.notifications : [];
 
-          parsed.settings = INITIAL_SETTINGS;
-          parsed.policies = INITIAL_POLICIES;
-          parsed.territories = INITIAL_TERRITORY_CONFIGS;
+          // If db.json has 0 claims, check if backup file has claims to restore
+          if (parsed.claims.length === 0 && fs.existsSync(DATA_FILE_BACKUP)) {
+            try {
+              const backupRaw = fs.readFileSync(DATA_FILE_BACKUP, 'utf-8');
+              const backupParsed = JSON.parse(backupRaw);
+              if (backupParsed && Array.isArray(backupParsed.claims) && backupParsed.claims.length > 0) {
+                parsed.claims = backupParsed.claims;
+                parsed.tours = backupParsed.tours || [];
+                parsed.expenseItems = backupParsed.expenseItems || [];
+                parsed.documents = backupParsed.documents || [];
+                parsed.auditTrail = backupParsed.auditTrail || [];
+                console.log(`[Store] Restored ${parsed.claims.length} claims from backup file!`);
+              }
+            } catch (be) {
+              console.error('Error reading backup file:', be);
+            }
+          }
+
+          parsed.settings = parsed.settings || INITIAL_SETTINGS;
+          parsed.policies = (Array.isArray(parsed.policies) && parsed.policies.length > 0) ? parsed.policies : INITIAL_POLICIES;
+          parsed.territories = (Array.isArray(parsed.territories) && parsed.territories.length > 0) ? parsed.territories : INITIAL_TERRITORY_CONFIGS;
 
           this.saveData(parsed);
           return parsed;
@@ -144,10 +163,74 @@ export class Store {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+      const serialized = JSON.stringify(this.data, null, 2);
+      fs.writeFileSync(DATA_FILE, serialized, 'utf-8');
+      try {
+        fs.writeFileSync(DATA_FILE_BACKUP, serialized, 'utf-8');
+      } catch (be) {
+        // backup write fallback
+      }
     } catch (err) {
       console.error('Failed to write db.json:', err);
     }
+  }
+
+  public getFullData(): DatabaseSchema {
+    return this.data;
+  }
+
+  public restoreData(backup: {
+    claims?: ExpenseClaim[];
+    tours?: Tour[];
+    expenseItems?: ExpenseItem[];
+    documents?: DocumentAttachment[];
+    auditTrail?: AuditTrailItem[];
+  }): boolean {
+    let changed = false;
+    if (Array.isArray(backup.claims)) {
+      for (const c of backup.claims) {
+        if (!this.data.claims.find(x => x.id === c.id)) {
+          this.data.claims.push(c);
+          changed = true;
+        }
+      }
+    }
+    if (Array.isArray(backup.tours)) {
+      for (const t of backup.tours) {
+        if (!this.data.tours.find(x => x.id === t.id)) {
+          this.data.tours.push(t);
+          changed = true;
+        }
+      }
+    }
+    if (Array.isArray(backup.expenseItems)) {
+      for (const item of backup.expenseItems) {
+        if (!this.data.expenseItems.find(x => x.id === item.id)) {
+          this.data.expenseItems.push(item);
+          changed = true;
+        }
+      }
+    }
+    if (Array.isArray(backup.documents)) {
+      for (const doc of backup.documents) {
+        if (!this.data.documents.find(x => x.id === doc.id)) {
+          this.data.documents.push(doc);
+          changed = true;
+        }
+      }
+    }
+    if (Array.isArray(backup.auditTrail)) {
+      for (const a of backup.auditTrail) {
+        if (!this.data.auditTrail.find(x => x.id === a.id)) {
+          this.data.auditTrail.push(a);
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      this.saveData();
+    }
+    return true;
   }
 
   // --- SETTINGS & POLICIES ---

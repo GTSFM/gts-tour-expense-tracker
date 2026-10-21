@@ -325,7 +325,7 @@ export const ClaimDetailDrawer: React.FC<ClaimDetailDrawerProps> = ({
                       </p>
                     </div>
                     <button
-                      onClick={() => setPreviewDocUrl(doc.fileUrl)}
+                      onClick={() => setPreviewDocUrl(doc.dataUrl || doc.fileUrl)}
                       className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-purple-700 font-semibold text-[11px] shrink-0"
                     >
                       Preview

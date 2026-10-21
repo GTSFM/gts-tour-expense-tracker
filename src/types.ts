@@ -162,6 +162,7 @@ export interface DocumentAttachment {
   documentType: string;
   documentName: string;
   fileUrl: string;
+  dataUrl?: string;
   fileSize: number;
   uploadedBy: string;
   uploadDate: string;
